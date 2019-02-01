@@ -1,6 +1,4 @@
-julia 0.3-
-NumericExtensions
+julia 1.0
 Distances
-Blocks
-Compat
-Iterators
+DataStructures
+StatsFuns

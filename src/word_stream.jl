@@ -1,85 +1,85 @@
-type WordStream
-    fp::Union(IO, AbstractString)
-    startpoint::Int64
-    endpoint::Int64
+import Base.iterate
+
+mutable struct WordStream
+    fp::IO
+    startpoint::Int
+    endpoint::Int
     buffer::IOBuffer
 
     # filter configuration
     rate::Float64   # if rate > 0, words will be subsampled according to distr
     filter::Bool    # if filter is true, only words present in the keys(distr) will be considered
-    distr::Dict{AbstractString, Float64}
+    distr::Dict{String, Float64}
 end
 
-function words_of(file::Union(IO,AbstractString); subsampling=(0,false,nothing), startpoint=-1, endpoint=-1)
+function words_of(file::IO; subsampling=(0,false,nothing), startpoint=-1, endpoint=-1)
     rate, filter, distr = subsampling
-    WordStream(file, startpoint, endpoint, IOBuffer(), rate, filter, (rate==0 && !filter) ? Dict{AbstractString,Float64}() : distr)
+    WordStream(file, startpoint, endpoint, IOBuffer(), rate, filter, (rate==0 && !filter) ? Dict{String,Float64}() : distr)
 end
 
-function Base.start(ws::WordStream)
-    if isa(ws.fp, AbstractString)
-        ws.fp = open(ws.fp)
-    end
-    if ws.startpoint >= 0
-        seek(ws.fp, ws.startpoint)
-    else
-        ws.startpoint = 0
-        ws.endpoint = filesize(ws.fp)
-    end
-    nothing
-end
-
-function Base.done(ws::WordStream, state)
+function iterate(ws::WordStream, state)
+    # NEXT / DONE
     while !eof(ws.fp)
         if ws.endpoint >= 0 && position(ws.fp) > ws.endpoint
             break
         end
         c = read(ws.fp, Char)
         if c == ' ' || c == '\n' || c == '\0' || c == '\r'
-            s = takebuf_string(ws.buffer)
+            s = String(take!(ws.buffer))
             if s == "" || (ws.filter && !haskey(ws.distr, s))
-                continue
+                continue 
             end
             if ws.rate > 0
                 prob = (sqrt(ws.distr[s] / ws.rate) + 1) * ws.rate / ws.distr[s]
-                if(prob < rand())
+                if prob < rand()
                     # @printf "throw %s, prob is %f\n" s prob
-                    continue;
+                    continue
                 end
             end
             write(ws.buffer, s)
-            return false
+            return (String(take!(ws.buffer)), state)
         else
             write(ws.buffer, c)
         end
     end
     #close(ws.fp)
-    return true
+    return nothing
 end
 
-function Base.next(ws::WordStream, state)
-    (takebuf_string(ws.buffer), nothing)
+function iterate(ws::WordStream)
+    # START
+    if ws.startpoint >= 0
+        seek(ws.fp, ws.startpoint)
+    else
+        ws.startpoint = 0
+        ws.endpoint = filesize(ws.fp)
+    end
+
+    return iterate(ws, nothing)
 end
 
-
-
-type SlidingWindow
+mutable struct SlidingWindow
     ws::WordStream
-    lsize::Int64
-    rsize::Int64
+    lsize::Int
+    rsize::Int
 end
 
-function Base.start(window::SlidingWindow)
-    convert(Array{AbstractString,1}, collect(take(window.ws, window.lsize + 1 + window.rsize)))
-end
-
-function Base.done(window::SlidingWindow, w::Array{AbstractString})
-    done(window.ws, nothing)
-end
-
-function Base.next(window::SlidingWindow, w::Array{AbstractString})
-    shift!(w)
-    push!(w, next(window.ws, nothing)[1])
-    (w, w)
+function Base.iterate(window::SlidingWindow, state=nothing)
+    if state == nothing
+        window_size = window.lsize + 1 + window.rsize
+        state = Vector{String}(undef, window_size)
+        state[1], _ = iterate(window.ws)
+        for i = 2:window_size
+            state[i], _ = iterate(window.ws, nothing)
+        end
+    end
+    popfirst!(state)
+    nextwindow = iterate(window.ws, nothing)
+    if nextwindow == nothing
+        return nothing
+    end
+    push!(state, nextwindow[1])
+    return (state, state)
 end
 
 function sliding_window(words; lsize=5, rsize=5)

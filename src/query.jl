@@ -7,15 +7,15 @@ function joinvec(embed::WordEmbedding, words::Vector, fn::Function, wv::Array=[]
         if isempty(wv)
             wv = vec(embed.embedding[word])
         else
-            wv = fn(wv, vec(embed.embedding[word]))
+            wv = fn.(wv, vec(embed.embedding[word]))
         end
     end
     wv
 end
 
-function find_nearest_words(embed::WordEmbedding, words::AbstractString; k=5)
-    positive_words = AbstractString[]
-    negative_words = AbstractString[]
+function find_nearest_words(embed::WordEmbedding, words::String; k=5)
+    positive_words = String[]
+    negative_words = String[]
     wordlist = positive_words
     for tok in split(words)
         tok = strip(tok)
@@ -34,8 +34,8 @@ end
 function find_nearest_words(embed::WordEmbedding, positive_words::Vector, negative_words::Vector; k=5)
     pq = PriorityQueue(Base.Order.Reverse)
 
-    wv = joinvec(embed, positive_words, .+, Array[])
-    wv = joinvec(embed, negative_words, .-, wv)
+    wv = joinvec(embed, positive_words, +, Array[])
+    wv = joinvec(embed, negative_words, -, wv)
 
     if !isempty(wv)
         for (w, embed_w) in embed.embedding

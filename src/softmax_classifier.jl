@@ -1,14 +1,14 @@
 # linear softmax classifier (with stochastic gradient descent)
-type LinearClassifier
-    k::Int64 # number of outputs
-    n::Int64 # number of inputs
+mutable struct LinearClassifier
+    k::Int # number of outputs
+    n::Int # number of inputs
     weights::Array{Float64, 2} # n * k weight matrix
 
     outputs :: Vector{Float64}
 end
 
 function LinearClassifier(k, n)
-    weights = rand(n, k) * 2 - 1; # range is [-1, 1]
+    weights = rand(n, k) * 2 .- 1; # range is [-1, 1]
     LinearClassifier(k, n, weights, zeros(k))
 end
 
@@ -20,7 +20,7 @@ end
 function predict!(c::LinearClassifier, x::Array{Float64})
     # c.outputs = vec(softmax(x * c.weights))
     s = 0.0
-    for i in 1:c.k
+    for i = 1:c.k
         s = 0.0
         for j in 1:c.n
             s += x[j] * c.weights[j, i]
@@ -46,7 +46,7 @@ function train_one(c::LinearClassifier, x::Array{Float64}, y::Int64, α::Float64
     m = 0.0
     j = 0
     limit = c.n - 4
-    for i in 1:c.k
+    for i = 1:c.k
         m = α * c.outputs[i]
         j = 1
         while j <= limit
@@ -69,7 +69,7 @@ function train_one(c::LinearClassifier, x::Array{Float64}, y::Int64, input_gradi
     m = 0.0
     j = 0
     limit = c.n - 4
-    for i in 1:c.k
+    for i = 1:c.k
         m = α * c.outputs[i]
         j = 1
         while j <= limit
